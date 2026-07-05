@@ -1,46 +1,38 @@
-from dotenv import load_dotenv
-import os
 import streamlit as st
-from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chains.question_answering import load_qa_chain
-from langchain.llms import OpenAI
-from langchain.callbacks import get_openai_callback
+from dotenv import load_dotenv
+
+from src.pdf_loader import load_pdf_text
+from src.vector_store import build_vector_store
+from src.chatbot import ask_question
 
 load_dotenv()
-from PIL import Image
-img = Image.open(r"C:\Users\KALYAN\Desktop\Projects\DocGenius\images.jpeg")
-st.set_page_config(page_title="DocGenius: Document Generation AI", page_icon= img)
-st.header("Ask Your PDF📄")
-pdf = st.file_uploader("Upload your PDF", type="pdf")
 
-if pdf is not None:
-    pdf_reader = PdfReader(pdf)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
+st.set_page_config(
+    page_title="DocGenius",
+    page_icon="📄",
+    layout="wide"
+)
 
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )  
+st.title("📄 DocGenius")
+st.caption("AI-powered PDF Question Answering System")
 
-    chunks = text_splitter.split_text(text)
+uploaded_file = st.file_uploader(
+    "Upload a PDF",
+    type=["pdf"]
+)
 
-    embeddings = OpenAIEmbeddings()
-    knowledge_base = FAISS.from_texts(chunks, embeddings)
+if uploaded_file:
+    with st.spinner("Processing document..."):
+        document_text = load_pdf_text(uploaded_file)
+        vector_db = build_vector_store(document_text)
 
-    query = st.text_input("Ask your Question about your PDF")
-    if query:
-        docs = knowledge_base.similarity_search(query)
+    st.success("Document processed successfully.")
 
-        llm = OpenAI()
-        chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=docs, question=query)
-           
-        st.success(response)
-        
+    question = st.text_input("Ask a question")
+
+    if question:
+        with st.spinner("Generating answer..."):
+            answer = ask_question(question, vector_db)
+
+        st.markdown("### Answer")
+        st.write(answer)
